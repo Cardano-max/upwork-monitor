@@ -24,18 +24,20 @@ jobs:
         with:
           path: |
             seen_jobs.json
-            upwork_cookies.json
-          key: upwork-data-v1
+          key: upwork-seen-jobs-v1
+      - name: Decode cookies from secret
+        env:
+          UPWORK_COOKIES_B64: ${{ secrets.UPWORK_COOKIES_B64 }}
+        run: echo "$UPWORK_COOKIES_B64" | base64 -d > upwork_cookies.json
       - name: Run monitor (single check)
         env:
           SINGLE_RUN: "true"
           NTFY_TOPIC: "ateeb-upwork-2026"
         run: python3 monitor.py
-      - name: Save state
+      - name: Save seen jobs
         if: always()
         uses: actions/cache/save@v4
         with:
           path: |
             seen_jobs.json
-            upwork_cookies.json
-          key: upwork-data-v1
+          key: upwork-seen-jobs-v1
