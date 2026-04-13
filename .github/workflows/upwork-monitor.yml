@@ -8,32 +8,61 @@ on:
 jobs:
   check-jobs:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           playwright install chromium
           playwright install-deps chromium
-      - name: Restore cookies and seen jobs
+
+      - name: Restore seen jobs cache
         uses: actions/cache@v4
         with:
           path: |
             seen_jobs.json
           key: upwork-seen-jobs-v1
+
       - name: Decode cookies from secret
         env:
           UPWORK_COOKIES_B64: ${{ secrets.UPWORK_COOKIES_B64 }}
-        run: echo "$UPWORK_COOKIES_B64" | base64 -d > upwork_cookies.json
+        run: |
+          if [ -n "$UPWORK_COOKIES_B64" ]; then
+            echo "$UPWORK_COOKIES_B64" | base64 -d > upwork_cookies.json
+            echo "Cookies decoded from secret"
+          else
+            echo "No cookies secret found, will rely on auto-login"
+          fi
+
       - name: Run monitor (single check)
         env:
           SINGLE_RUN: "true"
           NTFY_TOPIC: "ateeb-upwork-2026"
+          UPWORK_EMAIL: ${{ secrets.UPWORK_EMAIL }}
+          UPWORK_PASSWORD: ${{ secrets.UPWORK_PASSWORD }}
+          UPWORK_SECRET_ANSWER: ${{ secrets.UPWORK_SECRET_ANSWER }}
         run: python3 monitor.py
+
+      - name: Re-encode and update cookies if refreshed
+        env:
+          UPWORK_COOKIES_B64_OLD: ${{ secrets.UPWORK_COOKIES_B64 }}
+        run: |
+          if [ -f upwork_cookies.json ]; then
+            NEW_B64=$(base64 -w 0 upwork_cookies.json)
+            if [ "$NEW_B64" != "$UPWORK_COOKIES_B64_OLD" ]; then
+              echo "Cookies were refreshed during this run"
+              echo "$NEW_B64" > cookies_b64_new.txt
+              echo "COOKIES_REFRESHED=true" >> $GITHUB_ENV
+            fi
+          fi
+
       - name: Save seen jobs
         if: always()
         uses: actions/cache/save@v4
